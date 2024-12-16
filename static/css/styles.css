@@ -42,3 +42,8 @@ input[type="submit"] {
 input[type="submit"]:hover {
     background-color: #45a049;
 }
+img {
+    max-width: 100%; /* Se ajustará automáticamente al tamaño del contenedor */
+    height: auto;
+}
+

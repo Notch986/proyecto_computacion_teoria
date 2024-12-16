@@ -1,6 +1,7 @@
 import os
-from flask import Flask, request, render_template
 import cv2
+import numpy as np
+from flask import Flask, request, render_template
 import ollama
 import time
 
@@ -11,20 +12,36 @@ app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Asegúrate de que el directorio 'uploads' existe
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 # Función para segmentar imágenes con OpenCV
 def segment_image(image_path):
     # Cargar imagen
-    image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+    image = cv2.imread(image_path)
     
     # Convertir a escala de grises
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
-    # Usar un umbral para segmentar la imagen
-    _, segmented = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+    # Aplicar un desenfoque gaussiano para reducir el ruido
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    
+    # Usar el detector de bordes de Canny para encontrar contornos
+    edges = cv2.Canny(blurred, 50, 150)
+    
+    # Encontrar contornos
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Crear una imagen en blanco para dibujar los contornos
+    segmented_image = np.zeros_like(image)
+    
+    # Dibujar los contornos encontrados sobre la imagen segmentada
+    cv2.drawContours(segmented_image, contours, -1, (0, 255, 0), 3)
     
     # Guardar la imagen segmentada
     segmented_path = os.path.join(UPLOAD_FOLDER, 'segmented_' + os.path.basename(image_path))
-    cv2.imwrite(segmented_path, segmented)
+    cv2.imwrite(segmented_path, segmented_image)
+    
     return segmented_path
 
 # Función para interactuar con LLaVA
@@ -64,20 +81,26 @@ def upload_image():
     if request.method == 'POST':
         # Obtener la imagen subida y guardar en la carpeta de uploads
         file = request.files['image']
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        file.save(file_path)
+        
+        if file:
+            # Guardar el archivo en el directorio de uploads
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(file_path)
 
-        # Obtener el tipo de evaluación
-        evaluation_type = request.form['evaluation_type']
+            # Obtener el tipo de evaluación
+            evaluation_type = request.form['evaluation_type']
 
-        # Segmentar la imagen
-        segmented_image_path = segment_image(file_path)
+            # Segmentar la imagen
+            segmented_image_path = segment_image(file_path)
 
-        # Analizar la imagen con LLaVA
-        response = analyze_webpage(segmented_image_path, evaluation_type)
+            # Analizar la imagen con LLaVA
+            response = analyze_webpage(segmented_image_path, evaluation_type)
 
-        # Retornar la página de resultados con la respuesta de LLaVA
-        return render_template('result.html', result=response, image_path=segmented_image_path)
+            # Retornar la página de resultados con la respuesta de LLaVA
+            return render_template('result.html', 
+                                   result=response, 
+                                   image_path='uploads/' + file.filename, 
+                                   segmented_image_path='uploads/segmented_' + file.filename)
 
     return render_template('upload.html')
 
