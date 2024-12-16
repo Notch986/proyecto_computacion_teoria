@@ -1,0 +1,51 @@
+from flask import Flask, render_template, request, redirect, url_for
+import os
+from werkzeug.utils import secure_filename
+import time
+import ollama
+
+app = Flask(__name__)
+
+# Configuración de la carpeta de imágenes subidas
+app.config['UPLOAD_FOLDER'] = 'static/uploads/'
+app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
+
+# Función para verificar si la extensión es permitida
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# Ruta principal - Subir imagen
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+# Ruta para manejar la carga de imagen
+@app.route('/upload', methods=['POST'])
+def upload_image():
+    if 'file' not in request.files:
+        return redirect(request.url)
+    
+    file = request.files['file']
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        
+        # Llamada a la función de evaluación con la imagen
+        inicio = time.time()
+        rpt = ollama.chat(
+            model='llava:7b',
+            messages=[{
+                'role': 'user',
+                'content': 'What do you think of this web interface of a trucking page? What recommendations would you give for the UI/UX designer, be detailed',
+                'images': [os.path.join(app.config['UPLOAD_FOLDER'], filename)]
+            }]
+        )
+        fin = time.time()
+        result = rpt['message']['content']
+
+        return render_template('result.html', filename=filename, result=result)
+
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(debug=True)
