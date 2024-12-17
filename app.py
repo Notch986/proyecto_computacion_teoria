@@ -9,10 +9,9 @@ import time
 app = Flask(__name__)
 
 # Carpeta para almacenar imágenes
-UPLOAD_FOLDER = 'uploads/'
+UPLOAD_FOLDER = 'static/uploads/'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Asegúrate de que el directorio 'uploads' existe
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Función para segmentar imágenes con OpenCV
